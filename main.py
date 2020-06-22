@@ -1,114 +1,116 @@
-import hashlib
-import os
-import time
-import gi
-from ulauncher.api.client.EventListener import EventListener
 from ulauncher.api.client.Extension import Extension
-from ulauncher.api.shared.action.ExtensionCustomAction import ExtensionCustomAction
-from ulauncher.api.shared.action.RenderResultListAction import RenderResultListAction
-from ulauncher.api.shared.event import ItemEnterEvent, KeywordQueryEvent
+from ulauncher.api.client.EventListener import EventListener
+from ulauncher.api.shared.event import KeywordQueryEvent, SystemExitEvent
 from ulauncher.api.shared.item.ExtensionResultItem import ExtensionResultItem
+from ulauncher.api.shared.action.RenderResultListAction import RenderResultListAction
+from ulauncher.api.shared.action.ExtensionCustomAction import ExtensionCustomAction
+from ulauncher.api.shared.action.RunScriptAction import RunScriptAction
 
-gi.require_version('Gtk', '3.0')
-gi.require_version('Wnck', '3.0')
-from gi.repository import Gtk
-from gi.repository import Wnck
-
-XDG_FALLBACK = os.path.join(os.getenv('HOME'), '.cache')
-XDG_CACHE = os.getenv('XDG_CACHE_HOME', XDG_FALLBACK)
-CACHE_DIR = os.path.join(XDG_CACHE,  'ulauncher_window_switcher')
+import subprocess
 
 
-def is_hidden_window(window):
-    state = window.get_state()
-    return state & Wnck.WindowState.SKIP_PAGER or state & Wnck.WindowState.SKIP_TASKLIST
+ACTIVATE_COMMAND = 'wmctrl -i -a {}'
 
 
 def list_windows():
-    screen = Wnck.Screen.get_default()
-    # We need to force the update as screen is populated lazily by default
-    screen.force_update()
-    # We need to wait for all events to be processed
-    while Gtk.events_pending():
-        Gtk.main_iteration()
-    return [window for window in screen.get_windows() if not is_hidden_window(window)]
+    """List the windows being managed by the window manager.
+
+    Returns:
+        list -- with dict for each window entry:
+                'id': window ID
+                'desktop': desktop num, -1 for sticky (see `man wmctrl`)
+                'pid': process id for the window
+                'host': hostname where the window is at
+                'title': window title"""
+    proc = subprocess.Popen(['wmctrl', '-lp'],  # -l for list, -p include PID
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    out, err = proc.communicate()
+    windows = []
+    for line in out.splitlines():
+        info = str(line, encoding='utf8').split()
+        # Format expected: ID num PID host title with spaces
+        window_id = info[0]
+        desktop_num = info[1]
+        pid = info[2]
+        host = info[3]
+        title = ' '.join(info[4:])
+        windows.append({
+            'id': window_id,
+            'desktop': desktop_num,
+            'pid': pid,
+            'host': host,
+            'title': title
+        })
+
+    return windows
 
 
-def activate(window):
-    workspace = window.get_workspace()
-    if workspace is not None:
-        # We need to first activate the workspace, otherwise windows on a different workspace might not become visible
-        workspace.activate(int(time.time()))
+def get_process_name(pid):
+    """Find out process name, given its' ID
 
-    window.activate(int(time.time()))
-
-
-class WindowItem:
-
-    def __init__(self, window, previous_selection):
-        self.id = window.get_xid()
-        self.app_name = window.get_application().get_name()
-        self.title = window.get_name()
-        self.icon = self.retrieve_or_save_icon(window.get_icon())
-        self.is_last = window.get_xid() == previous_selection
-
-    def retrieve_or_save_icon(self, icon):
-        # Some app have crazy names, ensure we use something reasonable
-        file_name = hashlib.sha224(self.app_name).hexdigest()
-        icon_full_path = CACHE_DIR + '/' + file_name + '.png'
-        if not os.path.isfile(icon_full_path):
-            icon.savev(icon_full_path, 'png', [], [])
-        return icon_full_path
-
-    def to_extension_item(self):
-        return ExtensionResultItem(icon=self.icon,
-                                   name=self.app_name,
-                                   description=self.title,
-                                   selected_by_default=self.is_last,
-                                   on_enter=ExtensionCustomAction(self.id, keep_app_open=False))
-
-    def is_matching(self, keyword):
-        # Assumes UTF-8 input
-        ascii_keyword = keyword.encode().lower()
-        return ascii_keyword in self.app_name.lower() or ascii_keyword in self.title.lower()
+    Arguments:
+        pid {int} -- process ID
+    Returns:
+        str -- process name
+    """
+    proc = subprocess.Popen(['ps', '-p', pid, '-o', 'comm='],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE)
+    out, err = proc.communicate()
+    return out.strip().decode('utf-8')
 
 
-class WindowSwitcherExtension(Extension):
+def get_open_windows():
+    """Get open windows
+
+    Returns:
+        List[ExtensionResultItem] -- list of Ulauncher result items
+    """
+    windows = list_windows()
+    # Filter out stickies (desktop is -1)
+    non_stickies = [x for x in windows if x['desktop'] != '-1']
+
+    results = []
+    for window in non_stickies:
+        results.append(ExtensionResultItem(icon='images/icon.png',
+                                           name=get_process_name(
+                                               window['pid']),
+                                           description=window['title'],
+                                           on_enter=RunScriptAction(
+                                               ACTIVATE_COMMAND.format(window['id']), None)
+                                           ))
+    return results
+
+
+class DemoExtension(Extension):
 
     def __init__(self):
-        super(WindowSwitcherExtension, self).__init__()
-        self.selection = None
-        self.previous_selection = None
+        super(DemoExtension, self).__init__()
         self.subscribe(KeywordQueryEvent, KeywordQueryEventListener())
-        self.subscribe(ItemEnterEvent, ItemEnterEventListener())
-        # Ensure the icon cache directory is created
-        if not os.path.exists(CACHE_DIR):
-            os.makedirs(CACHE_DIR)
+        self.subscribe(SystemExitEvent, SystemExitEventListener())
+        self.windows = []
+
+
+class SystemExitEventListener(EventListener):
+    def on_event(self, event, extension):
+        pass
 
 
 class KeywordQueryEventListener(EventListener):
-    def on_event(self, event, extension):
-        query = event.get_argument()
-        if query is None:
-            # The extension has just been triggered, let's initialize the windows list.
-            # (Or we delete all previously typed characters, but we can safely ignore that case)
-            query = ''
-            extension.items = [WindowItem(window, extension.previous_selection) for window in list_windows()]
-        matching_items = [window_item.to_extension_item() for window_item in extension.items if
-                          window_item.is_matching(query)]
-        return RenderResultListAction(matching_items)
 
-
-class ItemEnterEventListener(EventListener):
     def on_event(self, event, extension):
-        for window in list_windows():
-            if window.get_xid() == event.get_data():
-                previous_selection = extension.selection
-                extension.previous_selection = previous_selection
-                extension.selection = window.get_xid()
-                activate(window)
-        Wnck.shutdown()
+        windows = get_open_windows()
+        extension.windows = windows  # persistance
+
+        arg = event.get_argument()
+        if arg is not None:
+            # filter by title or process name
+            windows = [x for x in windows if arg in x.get_name()
+                       or arg in x.get_description(None)]
+
+        return RenderResultListAction(list(windows))
 
 
 if __name__ == '__main__':
-    WindowSwitcherExtension().run()
+    DemoExtension().run()

@@ -1,20 +1,20 @@
 {
-  "manifest_version": "2",
-  "api_version": "1",
-  "name": "Windows switcher",
-  "description": "Search the open windows and quickly switch to it. (See README for installation dependencies)",
-  "developer_name": "Jean-Michel Bea",
-  "icon": "images/icon.png",
-  "options": {
-    "query_debounce": 0.1
-  },
-  "preferences": [
-    {
-      "id": "switch_kw",
-      "type": "keyword",
-      "name": "Windows switcher",
-      "description": "Type this keyword followed by space to start listing your windows.",
-      "default_value": "ws"
-    }
-  ]
+    "required_api_version": "^2.0.0",
+    "api_version" :"^2.0.0",
+    "name": "Window select",
+    "description": "Select from a list of open windows",
+    "developer_name": "Paulius Stukys",
+    "icon": "images/icon.png",
+    "options": {
+      "query_debounce": 0.01
+    },
+    "preferences": [
+      {
+        "id": "window_select_kw",
+        "type": "keyword",
+        "name": "Windows",
+        "description": "List of open windows",
+        "default_value": "w"
+      }
+    ]
 }
