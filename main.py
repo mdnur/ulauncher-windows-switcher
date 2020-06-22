@@ -1,23 +1,24 @@
 import hashlib
 import os
 import time
+
 import gi
-from ulauncher.api.client.Extension import Extension
-from ulauncher.api.client.EventListener import EventListener
-from ulauncher.api.shared.action.ExtensionCustomAction import ExtensionCustomAction
-from ulauncher.api.shared.event import KeywordQueryEvent, ItemEnterEvent
-from ulauncher.api.shared.item.ExtensionResultItem import ExtensionResultItem
-from ulauncher.api.shared.action.RenderResultListAction import RenderResultListAction
-from ulauncher.api.shared.action.HideWindowAction import HideWindowAction
 
 gi.require_version('Gtk', '3.0')
 gi.require_version('Wnck', '3.0')
 from gi.repository import Gtk
 from gi.repository import Wnck
 
+from ulauncher.api.client.Extension import Extension
+from ulauncher.api.client.EventListener import EventListener
+from ulauncher.api.shared.action.ExtensionCustomAction import ExtensionCustomAction
+from ulauncher.api.shared.event import KeywordQueryEvent, ItemEnterEvent
+from ulauncher.api.shared.item.ExtensionResultItem import ExtensionResultItem
+from ulauncher.api.shared.action.RenderResultListAction import RenderResultListAction
+
 XDG_FALLBACK = os.path.join(os.getenv('HOME'), '.cache')
 XDG_CACHE = os.getenv('XDG_CACHE_HOME', XDG_FALLBACK)
-CACHE_DIR = os.path.join(XDG_CACHE,  'ulauncher_window_switcher')
+CACHE_DIR = os.path.join(XDG_CACHE, 'ulauncher_window_switcher')
 
 
 def is_hidden_window(window):
