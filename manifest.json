@@ -1,7 +1,7 @@
 {
     "required_api_version": "^2.0.0",
     "api_version" :"^2.0.0",
-    "name": "Window select",
+    "name": "Windows switcher",
     "description": "Select from a list of open windows",
     "developer_name": "Mohammad Nur",
     "icon": "images/icon.png",
