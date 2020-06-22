@@ -10,11 +10,11 @@
     },
     "preferences": [
       {
-        "id": "window_select_kw",
-        "type": "keyword",
-        "name": "Windows",
-        "description": "List of open windows",
-        "default_value": "w"
+      "id": "switch_kw",
+      "type": "keyword",
+      "name": "Windows switcher",
+      "description": "Type this keyword followed by space to start listing your windows.",
+      "default_value": "ws"
       }
     ]
 }
